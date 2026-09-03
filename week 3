@@ -184,3 +184,35 @@ legend("bottomright", legend = names(group_colors), col = group_colors, pch = 16
 
 # likelihood:     L(alpha, beta)    = ∏_{t=1}^{n} P_green(t)^I(c_t = green) * P_blue(t)^I(c_t = blue)
 # loglikelihood:  logL(alpha, beta) = Σ_{t=1}^{n} [I(c_t = green) * log(P_green(t)) + I(c_t = blue) * log(blue(t))]
+neglogL <- function(params, choice, reward, V_init = c(green = 0, blue = 0)) {
+  alpha   <- params[1]
+  beta    <- params[2]
+  
+  V       <- V_init
+  n       <- length(choice)
+  loglik  <- 0 # starting value, loop will update
+  
+  for (t in 1:n) {
+    p_green <- softmax(V, beta)
+    p_chosen <- if (choice[t] == "green") p_green else (1 - p_green)
+    loglik <- loglik + log(p_chosen)
+    
+    V <- value_update(V, choice[t], reward[t], alpha)
+  }
+  
+  -loglik
+}
+
+fit <- optim(
+  par = c(alpha = 0.2, beta = 1),
+  fn = neglogL,
+  choice = sim$choice,
+  reward = sim$reward,
+  method = "L-BFGS-B",
+  lower = c(0.001, 0.001),
+  upper = c(1, 20)
+)
+
+fit$par
+params$alpha
+params$beta
