@@ -224,3 +224,4 @@ fit <- optim(
 fit$par
 params$alpha
 params$beta
+
