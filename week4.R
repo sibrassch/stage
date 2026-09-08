@@ -2,7 +2,7 @@
 # GOAL 2: plot correlation estimated vs real values X (vanaf lijn 214)
 # GOAL 3: model fitten op echte data                X (vanaf lijn 236)
 # GOAL 4: second set of p_reward in model           X (vanaf lijn 347)
-# GOAL 5: make model switch based on feedback
+# GOAL 5: make model switch based on feedback       X (aanpassing lijn 378)
 
 # copy paste RW model voor MLE
 softmax <- function(V, beta) {
@@ -357,6 +357,7 @@ simulate_RW_task <- function(n_trials           = 220,
                              V_init             = c(green = 0, blue = 0)) {
   V <- V_init
   current_correct <- correct_stim
+  correct_streak <- 0
   
   results <- data.frame(
     trial          = 1:n_trials,
@@ -371,8 +372,32 @@ simulate_RW_task <- function(n_trials           = 220,
   for (t in 1:n_trials) {
     
     # flip when we hit reversal trial
-    if (!is.null(reversal_trial) && t %in% reversal_trial) {
+#    if (!is.null(reversal_trial) && t %in% reversal_trial) {
+#      current_correct <- ifelse(current_correct == "green", "blue", "green")
+#    }
+    
+    # flip obv 2 0-rewards
+#    if (t > 2 && results$reward[t-1] == 0 && results$reward[t-2] == 0) {
+#      current_correct <- ifelse(current_correct == "green", "blue", "green")
+#    }
+    
+    # flip na 2 foute keuzes
+#    if (t > 2 && results$correct[t-1] == FALSE && results$correct[t-2] == FALSE) {
+#      current_correct <- ifelse(current_correct == "green", "blue", "green")
+#    }
+    
+    # flip na 10 juiste keuzes
+    if (t > 1) {
+      if (results$correct[t-1] == TRUE) {
+         correct_streak <- correct_streak + 1
+       } else {
+         correct_streak <- 0
+       }
+    }
+    
+    if (correct_streak >= 10) {
       current_correct <- ifelse(current_correct == "green", "blue", "green")
+      correct_streak <- 0
     }
     
     p_green <- softmax(V, beta)
@@ -403,9 +428,9 @@ sim_reversal <- simulate_RW_task(
   n_trials           = 150,
   correct_stim       = "green",
   reversal_trial     = c(21, 41, 61, 81, 101, 121, 141),
-  p_reward_correct   = 0.8,
-  p_reward_incorrect = 0.2,
-  alpha              = 0.2,
+  p_reward_correct   = 0.95,
+  p_reward_incorrect = 0.05,
+  alpha              = 0.3,
   beta               = 3
 )
 
@@ -419,7 +444,4 @@ lines(sim_reversal$trial, sim_reversal$V_blue, col = "dodgerblue", lwd = "2")
 legend("bottomright", legend = c("Green butterfly", "Blue butterfly"), 
        col = c("forestgreen", "dodgerblue"), lwd = "2", bty = "n")
 # GOAL 4 X
-
-
-
-# model laten switchen van reward probabilities obv feedback en niet vast aantal trials
+# GOAL 5 X
