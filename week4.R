@@ -372,9 +372,9 @@ simulate_RW_task <- function(n_trials           = 220,
   for (t in 1:n_trials) {
     
     # flip when we hit reversal trial
-#    if (!is.null(reversal_trial) && t %in% reversal_trial) {
-#      current_correct <- ifelse(current_correct == "green", "blue", "green")
-#    }
+    if (!is.null(reversal_trial) && t %in% reversal_trial) {
+      current_correct <- ifelse(current_correct == "green", "blue", "green")
+    }
     
     # flip obv 2 0-rewards
 #    if (t > 2 && results$reward[t-1] == 0 && results$reward[t-2] == 0) {
@@ -387,18 +387,18 @@ simulate_RW_task <- function(n_trials           = 220,
 #    }
     
     # flip na 10 juiste keuzes
-    if (t > 1) {
-      if (results$correct[t-1] == TRUE) {
-         correct_streak <- correct_streak + 1
-       } else {
-         correct_streak <- 0
-       }
-    }
+#    if (t > 1) {
+#      if (results$correct[t-1] == TRUE) {
+#         correct_streak <- correct_streak + 1
+#       } else {
+#         correct_streak <- 0
+#       }
+#    }
     
-    if (correct_streak >= 10) {
-      current_correct <- ifelse(current_correct == "green", "blue", "green")
-      correct_streak <- 0
-    }
+#    if (correct_streak >= 10) {
+#      current_correct <- ifelse(current_correct == "green", "blue", "green")
+#      correct_streak <- 0
+#    }
     
     p_green <- softmax(V, beta)
     choice <- ifelse(runif(1) < p_green, "green", "blue")
@@ -445,3 +445,128 @@ legend("bottomright", legend = c("Green butterfly", "Blue butterfly"),
        col = c("forestgreen", "dodgerblue"), lwd = "2", bty = "n")
 # GOAL 4 X
 # GOAL 5 X
+
+# data genereren: sim 1000 keer runnen
+n_sims <- 1000
+
+true_alpha <- runif(n_sims, min = 0, max = 1)
+true_beta  <- runif(n_sims, min = 0, max = 10)
+
+sim_list <- vector("list", n_sims) # creating a list of 1000 dataframes (one for every output of 100 trials)
+
+for (i in 1:n_sims) {
+  sim_list[[i]] <- simulate_RW_task(
+    n_trials = 1000,
+    correct_stim = "green",
+    p_reward_correct = 0.8,
+    p_reward_incorrect = 0.2,
+    alpha = true_alpha[i],
+    beta = true_beta[i]
+  )
+}
+
+# data visualiseren
+summary_df <- data.frame(
+  sim = 1:n_sims,
+  alpha = true_alpha,
+  beta = true_beta,
+  prop_correct = sapply(sim_list, function(d) mean(d$correct)),
+  final_Vgreen = sapply(sim_list, function(d) tail(d$V_green, 1))
+)
+head(summary_df)
+beta_groups <- cut(summary_df$beta, breaks = 5,
+                   labels = c("low beta", "medium low beta", "medium beta", "medium high beta", "high beta"))
+group_colors <- c("low beta"         = "skyblue",
+                  "medium low beta"  = "chartreuse3",
+                  "medium beta"      = "gold1",
+                  "medium high beta" = "darkorange",
+                  "high beta"        = "firebrick")
+plot(summary_df$alpha, summary_df$prop_correct,
+     col = group_colors[beta_groups], pch = 16,
+     xlab = "alpha", ylab = "proportion correct",
+     main = "Proportion correct vs Alpha, colored by Beta",
+     bty = "l")
+
+legend("bottomright", legend = names(group_colors), col = group_colors, pch = 16, bty = "n", cex = 0.8)
+
+# likelihood:     L(alpha, beta)    = ∏_{t=1}^{n} P_green(t)^I(c_t = green) * P_blue(t)^I(c_t = blue)
+# loglikelihood:  logL(alpha, beta) = Σ_{t=1}^{n} [I(c_t = green) * log(P_green(t)) + I(c_t = blue) * log(blue(t))]
+neglogL <- function(params, choice, reward, V_init = c(green = 0, blue = 0)) {
+  alpha   <- params[1]
+  beta    <- params[2]
+  
+  V       <- V_init
+  n       <- length(choice)
+  loglik  <- 0 # starting value, loop will update
+  
+  for (t in 1:n) {
+    p_green <- softmax(V, beta)
+    p_chosen <- if (choice[t] == "green") p_green else (1 - p_green)
+    loglik <- loglik + log(p_chosen)
+    
+    V <- value_update(V, choice[t], reward[t], alpha)
+  }
+  
+  -loglik
+}
+
+fit <- optim(
+  par = c(alpha = 0.2, beta = 1),
+  fn = neglogL,
+  choice = sim_reversal$choice,
+  reward = sim_reversal$reward,
+  method = "L-BFGS-B",
+  lower = c(0.001, 0.001),
+  upper = c(1, 20)
+)
+
+fit$par
+c(alpha = params$alpha, beta = params$beta)
+
+# parameter recovery
+recovered_alpha   <- numeric(n_sims)
+recovered_beta    <- numeric(n_sims)
+
+for (i in 1:n_sims) {
+  d <- sim_list[[i]]
+  
+  fit_i <- tryCatch(
+    optim(
+      par      = c(alpha = 0.5, beta = 1),
+      fn       = neglogL,
+      choice   = d$choice,
+      reward   = d$reward,
+      method   = "L-BFGS-B",
+      lower    = c(0.001, 0.001),
+      upper    = c(1, 50) 
+    ),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(fit_i)) {
+    recovered_alpha[i]  <- fit_i$par["alpha"]
+    recovered_beta[i]   <- fit_i$par["beta"]
+  }
+  else {
+    recovered_alpha[i]  <- NA
+    recovered_beta[i]   <- NA
+  }
+}
+
+summary_df$recovered_alpha <- recovered_alpha
+summary_df$recovered_beta <- recovered_beta
+
+head(summary_df)
+
+# correlatie plot
+par(mfrow = c(1, 2))
+
+plot(summary_df$alpha, summary_df$recovered_alpha,
+     xlab = "true alpha", ylab = "recovered alpha",
+     main = "Alpha Recovery", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+abline(0, 1, col = "red", lty = 2)
+
+plot(summary_df$beta, summary_df$recovered_beta,
+     xlab = "true beta", ylab = "recovered beta",
+     main = "Beta Recovery", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+abline(0, 1, col = "red", lty = 2)
