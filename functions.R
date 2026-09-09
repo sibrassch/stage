@@ -90,3 +90,30 @@ neglogL <- function(params, choice, reward, V_init = c(green = 0, blue = 0)) {
   
   -loglik
 }
+
+# read data ==========================================================================================================================================
+read_one_subject <- function(file_path) {
+  data          <- read.csv(file_path)
+  
+  # remove practice data
+  data          <- data[startsWith(data$Stimulus, "Test"), ]
+  
+  # remove obersvations with NA or null
+  data          <- data[!is.na(data$Accuracy),]
+  data          <- data[!data$ResponseTime == "null",]
+  
+  # rt must be higher than 0.4
+  data          <- data[data$rt > .4, ]
+  
+  # set reward to 0 and 1
+  data$reward   <- data$Points/10
+  
+  # make stimulus binary
+  data$stimulus <- ifelse(data$Stimulus %in% c("Test_1", "Test_3"), 1, 2)
+  
+  # tag every row with subject identifier
+  data$subject  <- basename(file_path)
+  
+  # return data (the cleaned dataframe)
+  data
+}
