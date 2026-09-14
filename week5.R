@@ -110,13 +110,13 @@ simulate_switch_task <- function(n_trials            = 220,
 
 # run sim of the new model
 sim_switch <- simulate_switch_task(
-  n_trials = 150,
+  n_trials = 250,
   correct_stim = 'green',
   reversal_trial      = c(25, 50, 75, 100, 125, 150, 175, 200),
   p_reward_correct    = 0.80,
   p_reward_incorrect  = 0.20,
-  alpha               = 0.2,
-  beta                = 3,
+  alpha               = 0.3,
+  beta                = 4,
   V_A_init = c(green = 0.5, blue = 0.5),
   V_B_init = c(green = 0.5, blue = 0.5),
   threshold           = 2
