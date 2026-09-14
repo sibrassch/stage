@@ -234,7 +234,7 @@ abline(0, 1, col = "red", lty = 2)
 # choice --> Response 
 
 # data inlezen
-data_dir <- "/Users/sibrass/Documents/STAGE/reversallearning/Data/raw/"
+data_dir <- "/Users/sibrass/Documents/STAGE/start_info/reversallearning/Data/raw/"
 csv_files <- list.files(data_dir, pattern = "\\.csv$", full.names = TRUE)
 length(csv_files)
 csv_files[1:5]
