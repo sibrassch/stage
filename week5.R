@@ -1,3 +1,11 @@
+# GOAL1: make agent switch too                              X
+# GOAL2: correlatie accuracy en parameters empirische data  X
+          # (script week5_3)
+# GOAL3: generate data with new model                       X
+# GOAL4: parameter recovery of new model                    X
+# GOAL5: fit new model to data
+# GOAL6: make new model more complex with prior belief
+
 # UITBREIDING:
 # niet alleen de task switchet de values om de zo veel trials
 # de agent heeft ook 2 sets values nodig om tussen te switchen
@@ -110,16 +118,16 @@ simulate_switch_task <- function(n_trials            = 220,
 
 # run sim of the new model
 sim_switch <- simulate_switch_task(
-  n_trials = 250,
+  n_trials = 150,
   correct_stim = 'green',
   reversal_trial      = c(25, 50, 75, 100, 125, 150, 175, 200),
   p_reward_correct    = 0.80,
   p_reward_incorrect  = 0.20,
-  alpha               = 0.3,
-  beta                = 4,
+  alpha               = 0.2,
+  beta                = 3,
   V_A_init = c(green = 0.5, blue = 0.5),
   V_B_init = c(green = 0.5, blue = 0.5),
-  threshold           = 2
+  threshold           = 3
 )
 
 #plot
@@ -140,4 +148,102 @@ plot(sim_switch$trial, sim_switch$V_B_blue,
 lines(sim_switch$trial, sim_switch$V_B_green, col = "forestgreen",
       lwd = "2", lty = 2)
 mtext(sprintf("0-reward threshold = %d", params$threshold), side = 3, line = 0.3, cex = 0.85)
+
+# generate date with new model
+n_sims <- 1000
+
+set.seed(123)
+true_alpha <- runif(n_sims, min = 0, max = 1)
+true_beta  <- runif(n_sims, min = 0, max = 10)
+
+switch_sim_list <- vector("list", n_sims) # creating a list of 1000 dataframes (one for every output of 100 trials)
+
+for (i in 1:n_sims) {
+  switch_sim_list[[i]] <- simulate_switch_task(
+    n_trials = 150,
+    correct_stim = 'green',
+    reversal_trial      = c(25, 50, 75, 100, 125, 150, 175, 200),
+    p_reward_correct    = 0.80,
+    p_reward_incorrect  = 0.20,
+    alpha = true_alpha[i],
+    beta = true_beta[i],
+    V_A_init = c(green = 0.5, blue = 0.5),
+    V_B_init = c(green = 0.5, blue = 0.5),
+    threshold           = 3
+  )
+}
+
+summary_switch_df <- data.frame(
+  sim = 1:n_sims,
+  alpha = true_alpha,
+  beta = true_beta,
+  prop_correct = sapply(switch_sim_list, function(d) mean(d$correct)),
+  final_VAgreen = sapply(switch_sim_list, function(d) tail(d$V_A_green, 1)),
+  final_VBblue = sapply(switch_sim_list, function(d) tail(d$V_B_blue, 1))
+)
+head(summary_switch_df)
+
+# correlatie parameters met performance (= accuracy)
+par(mfrow = c(1, 2))
+plot(summary_switch_df$alpha, summary_switch_df$prop_correct,
+     xlab = "true alpha", ylab = "proportion correct",
+     main = "Correlation of Learning Rate with Performance", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+plot(summary_switch_df$beta, summary_switch_df$prop_correct,
+     xlab = "true beta", ylab = "proportion correct",
+     main = "Correlation of Inverse Temperature with Performance", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+
+# parameter recovery
+recovered_alpha   <- numeric(n_sims)
+recovered_beta    <- numeric(n_sims)
+
+for (i in 1:n_sims) {
+  d <- switch_sim_list[[i]]
+  
+  fit_i <- tryCatch(
+    optim(
+      par      = c(alpha = 0.5, beta = 1),
+      fn       = neglogL,
+      choice   = d$choice,
+      reward   = d$reward,
+      method   = "L-BFGS-B",
+      lower    = c(0.001, 0.001),
+      upper    = c(1, 10) 
+    ),
+    error = function(e) NULL
+  )
+  
+  if (!is.null(fit_i)) {
+    recovered_alpha[i]  <- fit_i$par["alpha"]
+    recovered_beta[i]   <- fit_i$par["beta"]
+  }
+  else {
+    recovered_alpha[i]  <- NA
+    recovered_beta[i]   <- NA
+  }
+}
+
+summary_switch_df$recovered_alpha <- recovered_alpha
+summary_switch_df$recovered_beta <- recovered_beta
+
+# plot voor correlatie true en recovered alpha en beta
+par(mfrow = c(1, 2))
+plot(summary_switch_df$alpha, summary_switch_df$recovered_alpha,
+     xlab = "true alpha", ylab = "recovered alpha",
+     main = "Correlation of True vs Recovered Alpha", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+abline(0, 1, col = "red", lty = 2)
+
+plot(summary_switch_df$beta, summary_switch_df$recovered_beta,
+     xlab = "true beta", ylab = "recovered beta",
+     main = "Correlation of True vs Recovered Beta", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+abline(0, 1, col = "red", lty = 2)
+
+# plot voor correlatie recovered params en performance
+par(mfrow = c(1, 2))
+plot(summary_switch_df$recovered_alpha, summary_switch_df$prop_correct,
+     xlab = "recovered alpha", ylab = "proportion correct",
+     main = "Correlation of Performance vs Recovered Alpha", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+
+plot(summary_switch_df$recovered_beta,summary_switch_df$prop_correct,
+     xlab = "recovered beta", ylab = "proportion correct",
+     main = "Correlation of Performance vs Recovered Beta", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
 
