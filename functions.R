@@ -120,9 +120,9 @@ read_one_subject <- function(file_path) {
 
 
 # switch model =======================================================================================================================================
-simulate_switch_task <- function(n_trials            = 220,
+simulate_switch_task <- function(n_trials            = 200,
                                  correct_stim        = "green",
-                                 reversal_trial      = c(25, 50, 75, 100, 125, 150, 175, 200),
+                                 reversal_trial      = c(25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400),
                                  p_reward_correct    = 0.80,
                                  p_reward_incorrect  = 0.20,
                                  alpha               = 0.2,
@@ -259,4 +259,20 @@ switchNLL <- function(params, choice, reward,
   }
   
   -loglik
+}
+
+# valueplot ===========================================================================================================================================
+valueplot <- function(simdata) {
+  plot(simdata$trial, simdata$V_A_blue, 
+      xlab = "Trial", ylab = "Values in State A",
+      bty = "l", type = "l", col = "dodgerblue",
+      lwd = "2", ylim = c(0, 1))
+  lines(simdata$trial, simdata$V_A_green, col = "forestgreen",
+        lwd = "2")
+  plot(simdata$trial, simdata$V_B_blue,
+       xlab = "Trial", ylab = "Values in state B",
+       bty = "l", type = "l", col = "dodgerblue",
+       lwd = "2", ylim = c(0, 1))
+  lines(simdata$trial, simdata$V_B_green, col = "forestgreen",
+        lwd = "2")
 }
