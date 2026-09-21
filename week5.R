@@ -3,7 +3,7 @@
           # (script week5_3)
 # GOAL3: generate data with new model                       X
 # GOAL4: parameter recovery of new model                    X
-# GOAL5: fit new model to data
+# GOAL5: fit new model to data                              X
 # GOAL6: make new model more complex with prior belief
 
 # UITBREIDING:
