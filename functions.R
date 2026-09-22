@@ -262,19 +262,21 @@ switchNLL <- function(params, choice, reward,
 }
 
 # valueplot ===========================================================================================================================================
-valueplot <- function(simdata) {
+simplevalueplot <- function(simdata) {
   plot(simdata$trial, simdata$V_A_blue, 
       xlab = "Trial", ylab = "Values in State A",
       bty = "l", type = "l", col = "dodgerblue",
       lwd = "2", ylim = c(0, 1))
   lines(simdata$trial, simdata$V_A_green, col = "forestgreen",
         lwd = "2")
+  abline(v = c(25, 50, 75, 100, 125, 150, 175, 200), lty = 2, lwd = 0.5)
   plot(simdata$trial, simdata$V_B_blue,
        xlab = "Trial", ylab = "Values in state B",
        bty = "l", type = "l", col = "dodgerblue",
        lwd = "2", ylim = c(0, 1))
   lines(simdata$trial, simdata$V_B_green, col = "forestgreen",
         lwd = "2")
+  abline(v = c(25, 50, 75, 100, 125, 150, 175, 200), lty = 2, lwd = 0.5)
 }
 
 # improved switch model ===============================================================================================================================
@@ -377,8 +379,47 @@ simulate_impr_switch <- function(n_trials            = 200,
   
   attr(results, "parameters") <- list(correct_stim = correct_stim, reversal_trial = reversal_trial,
                                       p_reward_correct = p_reward_correct, p_reward_incorrect = p_reward_incorrect, 
-                                      alpha = alpha, beta = beta, kappa = kappa, pe_threshold = pe_threshold, 
+                                      alpha = alpha, beta = beta, alphaPE = alphaPE, pe_threshold = pe_threshold, 
                                       V_A_init = V_A_init, V_B_init = V_B_init, 
                                       active_state_init = active_state_init, peS_init = peS_init)
   results
+}
+
+# complex valueplot ===========================================================================================================================================
+valueplot <- function(simdata) {
+  
+  state_bg <- function(data, target_state, state_col = "active_state",
+                       col = "grey88") {
+    r <- rle(as.character(data[[state_col]]))
+    ends <- cumsum(r$lengths)
+    starts <- c(1, head(ends, -1) + 1)
+    usr <- par("usr")
+    for (i in seq_along(r$values)) {
+      if (r$values[i] != target_state) next
+      rect(xleft = data$trial[starts[i]] - 0.05,
+           xright = data$trial[ends[i]] + 0.05,
+           ybottom = usr[3], ytop = usr[4],
+           col = col, border = NA)
+    }
+  }
+  
+  plot(simdata$trial, simdata$V_A_blue, 
+       xlab = "Trial", ylab = "Values in State A",
+       bty = "l", ylim = c(0, 1), 
+       type = "n")
+  state_bg(simdata, target_state = "A")
+  box(bty = "l")
+  lines(simdata$trial, simdata$V_A_green, col = "forestgreen", lwd = 2)
+  lines(simdata$trial, simdata$V_A_blue, col = "dodgerblue", lwd = 2)
+  abline(v = c(25, 50, 75, 100, 125, 150, 175, 200), lty = 2, lwd = 0.5)
+  
+  plot(simdata$trial, simdata$V_B_blue, 
+       xlab = "Trial", ylab = "Values in State B",
+       bty = "l", ylim = c(0, 1), 
+       type = "n")
+  state_bg(simdata, target_state = "B")
+  box(bty = "l")
+  lines(simdata$trial, simdata$V_B_green, col = "forestgreen", lwd = 2)
+  lines(simdata$trial, simdata$V_B_blue, col = "dodgerblue", lwd = 2)
+  abline(v = c(25, 50, 75, 100, 125, 150, 175, 200), lty = 2, lwd = 0.5)
 }
