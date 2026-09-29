@@ -149,7 +149,7 @@ lines(sim_switch$trial, sim_switch$V_B_green, col = "forestgreen",
       lwd = "2", lty = 2)
 mtext(sprintf("0-reward threshold = %d", params$threshold), side = 3, line = 0.3, cex = 0.85)
 
-# generate date with new model
+# generate data with new model
 n_sims <- 1000
 
 set.seed(123)

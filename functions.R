@@ -423,3 +423,50 @@ valueplot <- function(simdata) {
   lines(simdata$trial, simdata$V_B_blue, col = "dodgerblue", lwd = 2)
   abline(v = c(25, 50, 75, 100, 125, 150, 175, 200), lty = 2, lwd = 0.5)
 }
+
+# negative loglikelihood for improved switch model ============================================================================================================
+imprswitchNLL <- function(params, choice, reward,
+                      V_A_init = c(green = 0.5, blue = 0.5),
+                      V_B_init = c(green = 0.5, blue = 0.5),
+                      active_state_init = "A",
+                      peS_init = 0) {
+  alpha        <- params[1]
+  beta         <- params[2]
+  alphaPE      <- params[3]
+  pe_threshold <- params[4]
+  
+  V_A          <- V_A_init
+  V_B          <- V_B_init
+  active_state <- active_state_init
+  peS          <- peS_init
+
+  n       <- length(choice)
+  loglik  <- 0 # starting value, loop will update
+  
+  for (t in 1:n) {
+    ch <- choice[t]
+    r <- reward[t]
+    
+    V_active <- if (active_state == "A") V_A else V_B
+    p_green <- softmax(V_active, beta)
+    p_chosen <- if (ch == "green") p_green else (1 - p_green)
+    loglik <- loglik + log(p_chosen)
+    
+    pe_t <- r - unname(V_active[ch])
+    
+    if (active_state == "A") {
+      V_A <- value_update(V_A, ch, r, alpha)
+    } else {
+      V_B <- value_update(V_B, ch, r, alpha)
+    }
+    
+    peS <- peS + alphaPE * (pe_t - peS)
+    
+    if (peS < pe_threshold) {
+      active_state          <- ifelse(active_state == "A", "B", "A")
+      peS                   <- peS_init
+    }
+  }
+  
+  -loglik
+}
