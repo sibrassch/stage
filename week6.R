@@ -47,18 +47,6 @@ for (i in 1:n_sims) {
 }
 
 
-# plot peS ifv trial
-i = 2
-d = imprswitch_list[[i]]
-th <- sum_impr_switch$pe_threshold[i]
-par(mfrow = c(1,1))
-plot(d$trial, d$peS, type = "l",
-     xlab = "trial", ylab = "running prediction error sum",
-     main = paste0("peS over trials (sim ", i, ", threshold = ", round(th, 2), ")"),
-     ylim = c(-1, 1), bty = "l")
-abline(h = th, col = "red", lty = 2)
-
-
 # summary into dataframe
 sum_impr_switch <- data.frame(
   sim              = 1:n_sims,
