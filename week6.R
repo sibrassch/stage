@@ -22,7 +22,7 @@ n_sims <- 200
 set.seed(123)
 true_alpha       <- runif(n_sims, min = 0, max = 1)
 true_beta        <- runif(n_sims, min = 0, max = 10)
-true_alphaPE     <- rep(0.5, n_sims)
+true_alphaPE     <- runif(n_sims, min = 0, max = 1)
 true_pe_threshold   <- runif(n_sims, min = -0.45, max = -0.05)
 
 imprswitch_list <- vector("list", n_sims) # creating a list of 200 dataframes (one for every output of 100 trials)
@@ -45,6 +45,19 @@ for (i in 1:n_sims) {
     peS_init            = 0
   )
 }
+
+
+# plot peS ifv trial
+i = 2
+d = imprswitch_list[[i]]
+th <- sum_impr_switch$pe_threshold[i]
+par(mfrow = c(1,1))
+plot(d$trial, d$peS, type = "l",
+     xlab = "trial", ylab = "running prediction error sum",
+     main = paste0("peS over trials (sim ", i, ", threshold = ", round(th, 2), ")"),
+     ylim = c(-1, 1), bty = "l")
+abline(h = th, col = "red", lty = 2)
+
 
 # summary into dataframe
 sum_impr_switch <- data.frame(
@@ -72,6 +85,7 @@ plot(sum_impr_switch$alphaPE, sum_impr_switch$prop_correct,
 plot(sum_impr_switch$pe_threshold, sum_impr_switch$prop_correct,
      xlab = "true prediction error threshold", ylab = "proportion correct",
      main = "Relation between Prediction-Error Threshold and Performance", pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+
 
 # start parameter recovery
 n_starts <- 5
@@ -264,4 +278,3 @@ round(grid_res, 3)
 mean(grid_res[, "nll_grid"] > grid_res[, "nll_true"] + 0.5)
 
 
-system.time(fit_grid(imprswitch_list[[1]]))

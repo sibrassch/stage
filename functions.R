@@ -439,18 +439,16 @@ imprswitchNLL <- function(params, choice, reward,
   V_B          <- V_B_init
   active_state <- active_state_init
   peS          <- peS_init
-
-  n       <- length(choice)
-  loglik  <- 0 # starting value, loop will update
+  loglik       <- 0 # starting value, loop will update
   
-  for (t in 1:n) {
+  for (t in seq_along(choice)) {
     ch <- choice[t]
     r <- reward[t]
     
     V_active <- if (active_state == "A") V_A else V_B
     p_green <- softmax(V_active, beta)
     p_chosen <- if (ch == "green") p_green else (1 - p_green)
-    loglik <- loglik + log(p_chosen)
+    loglik <- loglik + log(max(p_chosen, 1e-10))
     
     pe_t <- r - unname(V_active[ch])
     
@@ -463,10 +461,29 @@ imprswitchNLL <- function(params, choice, reward,
     peS <- peS + alphaPE * (pe_t - peS)
     
     if (peS < pe_threshold) {
-      active_state          <- ifelse(active_state == "A", "B", "A")
+      active_state          <- if (active_state == "A") "B" else "A"
       peS                   <- peS_init
     }
   }
   
-  -loglik
+  unname(-loglik)
 }
+# recovery plot for improved switch model ============================================================================================================
+rec_plot <- function(true, rec, name) {
+  r <- round(cor(true, rec, use = "complete.obs"), 2)
+  plot(true, rec, xlab = paste("true", name), ylab = paste("recovered", name),
+       main = paste0("True vs recovered ", name, " (r = ", r, ")"),
+       pch = 16, col = rgb(0, 0, 0, 0.3), bty = "l")
+  abline(0, 1, col = "red", lty = 2)
+}
+
+# PESplot ============================================================================================================================================
+PEplot <- function(simdata) {
+  par(mfrow = c(1,1))
+  plot(simdata$trial, simdata$peS, type = "l",
+       xlab = "trial", ylab = "running prediction error sum",
+       ylim = c(-0.5, 1), bty = "l")
+  abline(h = attr(simdata, "parameters")$pe_threshold, col = "red", lty = 2)
+  points(simdata$trial[simdata$switch_dec], simdata$peS[simdata$switch_dec], col = "blue", pch = 16)
+}
+
