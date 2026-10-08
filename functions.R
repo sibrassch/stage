@@ -69,10 +69,69 @@ simulate_RW_task <- function(n_trials        = 100,
   results
 }
 
+# RW model met switch in de task (niet in agent zelf) ============================================================================================================================================
+simulate_RW <- function(n_trials                = 100,
+                        correct_stim            = "green",
+                        reversal_trial          = seq(25, 400, by = 25),
+                        p_reward_correct        = 0.8,
+                        p_reward_incorrect      = 0.2,
+                        alpha                   = 0.2,
+                        beta                    = 3,
+                        V_init                  = c(green = 0.5, blue = 0.5)) {
+  V <- V_init
+  current_correct <- correct_stim
+  
+  results <- data.frame(
+    trial          = 1:n_trials,
+    true_state     = character(n_trials),
+    choice         = character(n_trials),
+    correct        = logical(n_trials),
+    reward         = numeric(n_trials),
+    V_green        = numeric(n_trials),
+    V_blue         = numeric(n_trials),
+    p_choose_green = numeric(n_trials)
+  )
+  
+  for (t in 1:n_trials) {
+    
+    if (!is.null(reversal_trial) && t %in% reversal_trial) {
+      current_correct <- ifelse(current_correct == "green", "blue", "green")
+    }
+    
+    # softmax choice prob voor green
+    p_green <- softmax(V, beta)
+    
+    # agent makes choice
+    choice <- ifelse(runif(1) < p_green, "green", "blue")
+    is_correct <- (choice == current_correct)
+    
+    # after choice we get reward delivery
+    reward <- deliver_reward(is_correct, p_reward_correct, p_reward_incorrect)
+    
+    # na reward komt value update
+    V <- value_update(V, choice, reward, alpha)
+    
+    # log elke trial in de data frame
+    results$true_state[t]     <- current_correct
+    results$choice[t]         <- choice
+    results$correct[t]        <- is_correct
+    results$reward[t]         <- reward
+    results$V_green[t]        <- V["green"]
+    results$V_blue[t]         <- V["blue"]
+    results$p_choose_green[t] <- p_green
+  }
+  
+  # voeg attribuut "parameters" toe aan dataframe zodat exacte waarden van huidig gerunde simulatie opgeslaan worden
+  attr(results, "parameters") <- list(correct_stim = correct_stim, reversal_trial = reversal_trial, 
+                                      p_reward_correct = p_reward_correct, p_reward_incorrect = p_reward_incorrect, 
+                                      alpha = alpha, beta = beta, V_init = V_init)
+  results
+}
+
 # negative logLikelihood==============================================================================================================================
 # likelihood:     L(alpha, beta)    = ∏_{t=1}^{n} P_green(t)^I(c_t = green) * P_blue(t)^I(c_t = blue)
 # loglikelihood:  logL(alpha, beta) = Σ_{t=1}^{n} [I(c_t = green) * log(P_green(t)) + I(c_t = blue) * log(blue(t))]
-neglogL <- function(params, choice, reward, V_init = c(green = 0, blue = 0)) {
+neglogL <- function(params, choice, reward, V_init = c(green = 0.5, blue = 0.5)) {
   alpha   <- params[1]
   beta    <- params[2]
   
@@ -80,15 +139,14 @@ neglogL <- function(params, choice, reward, V_init = c(green = 0, blue = 0)) {
   n       <- length(choice)
   loglik  <- 0 # starting value, loop will update
   
-  for (t in 1:n) {
-    p_green <- softmax(V, beta)
-    p_chosen <- if (choice[t] == "green") p_green else (1 - p_green)
-    loglik <- loglik + log(p_chosen)
-    
-    V <- value_update(V, choice[t], reward[t], alpha)
+  for (t in seq_along(choice)) {
+    p_green    <- softmax(V, beta)
+    p_chosen   <- if (choice[t] == "green") p_green else (1 - p_green)
+    loglik     <- loglik + log(max(p_chosen, 1e-10))
+    V          <- value_update(V, choice[t], reward[t], alpha)
   }
   
-  -loglik
+  unname(-loglik)
 }
 
 # read data ==========================================================================================================================================
@@ -487,3 +545,188 @@ PEplot <- function(simdata) {
   points(simdata$trial[simdata$switch_dec], simdata$peS[simdata$switch_dec], col = "blue", pch = 16)
 }
 
+# fit grid function  ==================================================================================================================================
+fit_grid <- function(d,
+                     th_grid = -0.2,
+                     aPE_grid = seq(0.01, 0.50, by = 0.02),
+                     ab_starts = list(c(alpha = 0.3, beta = 3),
+                                      c(alpha = 0.6, beta = 1.5),
+                                      c(alpha = 0.1, beta = 6)),
+                     lower = c(0.001, 0.001),
+                     upper = c(1, 10)) {
+  best <- list(value = Inf)
+  for (th in th_grid) {
+    for (aPE in aPE_grid) {
+      for (st in ab_starts) {
+        f <- tryCatch(
+          optim(par = st,
+                fn = function(p) imprswitchNLL(c(p, aPE, th), d$choice, d$reward),
+                method = "L-BFGS-B",
+                lower = lower, upper = upper),
+          error = function(e) NULL)
+        if (!is.null(f) && f$value < best$value) {
+          best <- list(value = f$value,
+                       par = c(f$par, alphaPE = aPE, pe_threshold = th))
+        }
+      }
+    }
+  }
+  best
+}
+
+# newer improved switch model (new pes) ===============================================================================================================================
+simulate_switch2 <- function(n_trials            = 200,
+                             correct_stim        = "green",
+                             reversal_trial      = c(25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400),
+                             p_reward_correct    = 0.80,
+                             p_reward_incorrect  = 0.20,
+                             alpha               = 0.1,
+                             beta                = 10,
+                             alphaPE             = 0.2,
+                             pe_threshold        = -0.2,
+                             V_A_init            = c(green = 0.5, blue = 0.5),
+                             V_B_init            = c(green = 0.5, blue = 0.5),
+                             active_state_init   = "A",
+                             peS_init            = 0) {
+  
+  V_A                 <- V_A_init
+  V_B                 <- V_B_init
+  active_state        <- active_state_init
+  trials_since_switch <- 0
+  current_correct     <- correct_stim
+  peS                 <- peS_init
+  
+  
+  results <- data.frame(
+    trial            = 1:n_trials,
+    true_state       = character(n_trials),  # the actual state A or B of the task
+    active_state     = character(n_trials),  # the state the model assumes it is in
+    choice           = character(n_trials),
+    correct          = logical(n_trials),
+    reward           = numeric(n_trials),
+    pe               = numeric(n_trials),
+    peS              = numeric(n_trials),
+    V_A_green        = numeric(n_trials),
+    V_A_blue         = numeric(n_trials),
+    V_B_green        = numeric(n_trials),
+    V_B_blue         = numeric(n_trials),
+    p_choose_green   = numeric(n_trials),
+    switch_dec       = logical(n_trials)     # switch decision: did model decide to trigger switch?
+  )
+  
+  for (t in 1:n_trials) {
+    
+    # flip when we hit reversal trial
+    if (!is.null(reversal_trial) && t %in% reversal_trial) {
+      current_correct <- ifelse(current_correct == "green", "blue", "green")
+    }
+    
+    # capture and use correct active (model) state
+    active_state_used <- active_state
+    V_active <- if (active_state == "A") V_A else V_B
+    
+    p_green <- softmax(V_active, beta)
+    choice <- ifelse(runif(1) < p_green, "green", "blue")
+    is_correct <- (choice == current_correct)
+    
+    reward <- deliver_reward(is_correct, p_reward_correct, p_reward_incorrect)
+    
+    # raw prediction error, under current trial
+    pe_t <- reward - unname(V_active[choice])
+    
+    # running prediction error sum
+    pe_neg <- min(pe_t, 0)                       
+    peS    <- peS + alphaPE * (pe_neg - peS)     
+    
+    trials_since_switch <- trials_since_switch + 1
+    
+    switch_dec <- FALSE
+    
+    # trigger switch after prediction error sum reaches threshold
+    if (peS < pe_threshold) {
+      active_state          <- ifelse(active_state == "A", "B", "A")
+      peS                   <- peS_init
+      trials_since_switch   <- 0
+      switch_dec            <- TRUE
+    }
+    
+    # update values of the active state
+    if (!switch_dec) {
+      if (active_state == "A") {
+        V_A <- value_update(V_A, choice, reward, alpha)
+      } else {
+        V_B <- value_update(V_B, choice, reward, alpha)
+      }
+    }
+    
+    # log everything in results
+    results$true_state[t]       <- current_correct
+    results$active_state[t]     <- active_state_used
+    results$choice[t]           <- choice
+    results$correct[t]          <- is_correct
+    results$reward[t]           <- reward
+    results$pe[t]               <- pe_t
+    results$peS[t]              <- peS
+    results$V_A_green[t]        <- V_A["green"]
+    results$V_A_blue[t]         <- V_A["blue"]
+    results$V_B_green[t]        <- V_B["green"]
+    results$V_B_blue[t]         <- V_B["blue"]
+    results$p_choose_green[t]   <- p_green
+    results$switch_dec[t]       <- switch_dec
+  }
+  
+  attr(results, "parameters") <- list(correct_stim = correct_stim, reversal_trial = reversal_trial,
+                                      p_reward_correct = p_reward_correct, p_reward_incorrect = p_reward_incorrect, 
+                                      alpha = alpha, beta = beta, alphaPE = alphaPE, pe_threshold = pe_threshold, 
+                                      V_A_init = V_A_init, V_B_init = V_B_init, 
+                                      active_state_init = active_state_init, peS_init = peS_init)
+  results
+}
+
+# negative loglikelihood for switch2 model ============================================================================================================
+switch2NLL <- function(params, choice, reward,
+                          V_A_init = c(green = 0.5, blue = 0.5),
+                          V_B_init = c(green = 0.5, blue = 0.5),
+                          peS_init = 0) {
+  alpha        <- params[1]
+  beta         <- params[2]
+  alphaPE      <- params[3]
+  pe_threshold <- params[4]
+  
+  V_A          <- V_A_init
+  V_B          <- V_B_init
+  active_state <- "A"
+  peS          <- peS_init
+  loglik       <- 0 # starting value, loop will update
+  
+  for (t in seq_along(choice)) {
+    ch <- choice[t]
+    r <- reward[t]
+    
+    V_active <- if (active_state == "A") V_A else V_B
+    p_green <- softmax(V_active, beta)
+    p_chosen <- if (ch == "green") p_green else (1 - p_green)
+    loglik <- loglik + log(max(p_chosen, 1e-10))
+    
+    pe_t <- r - unname(V_active[ch])
+    pe_neg <- min(pe_t, 0)                       
+    peS <- peS + alphaPE * (pe_neg - peS)
+    
+    switch_dec <- FALSE
+    if (peS < pe_threshold) {
+      active_state          <- if (active_state == "A") "B" else "A"
+      peS                   <- peS_init
+      switch_dec            <- TRUE 
+    }
+    
+    if (!switch_dec) {
+      if (active_state == "A") {
+        V_A <- value_update(V_A, ch, r, alpha)
+      } else {
+        V_B <- value_update(V_B, ch, r, alpha)
+      }
+    }
+  }
+  
+  unname(-loglik)
+}
